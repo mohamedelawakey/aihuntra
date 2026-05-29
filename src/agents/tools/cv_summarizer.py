@@ -1,5 +1,6 @@
 from src.agents.prompts.summarizing_prompt import SummarizingPrompt
 from src.agents.schemas.cv_schema import CVParseResult
+from src.utils.exceptions import CVSummarizationError
 from pydantic import ValidationError
 from src.models.model import Model
 import json
@@ -26,10 +27,17 @@ class CVSummarizer:
 
         try:
             parsed_response = json.loads(response)
-            return CVParseResult.model_validate(parsed_response).model_dump()
+        except json.JSONDecodeError as error:
+            raise CVSummarizationError(
+                "LLM returned invalid JSON for CV parsing"
+            ) from error
 
-        except (json.JSONDecodeError, ValidationError):
-            return CVParseResult().model_dump()
+        try:
+            return CVParseResult.model_validate(parsed_response).model_dump()
+        except ValidationError as error:
+            raise CVSummarizationError(
+                "LLM returned JSON that does not match the CV schema"
+            ) from error
 
     @staticmethod
     def _extract_json(response: str) -> str:
